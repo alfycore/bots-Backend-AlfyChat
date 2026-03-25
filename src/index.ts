@@ -62,6 +62,69 @@ async function startService() {
     await pool.execute('SELECT 1');
     logger.info('Connexion MySQL établie');
 
+    // Créer les tables si elles n'existent pas
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS bots (
+        id VARCHAR(36) PRIMARY KEY,
+        owner_id VARCHAR(36) NOT NULL,
+        name VARCHAR(32) NOT NULL,
+        description VARCHAR(500),
+        token VARCHAR(64) NOT NULL,
+        prefix VARCHAR(5) DEFAULT '!',
+        status ENUM('online','offline','maintenance') DEFAULT 'offline',
+        is_public TINYINT(1) DEFAULT 0,
+        is_verified TINYINT(1) DEFAULT 0,
+        certification_status ENUM('none','pending','approved','rejected') DEFAULT 'none',
+        certification_note VARCHAR(500),
+        invite_count INT DEFAULT 0,
+        tags JSON,
+        avatar_url VARCHAR(500),
+        website_url VARCHAR(500),
+        support_server_url VARCHAR(500),
+        privacy_policy_url VARCHAR(500),
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS bot_commands (
+        id VARCHAR(36) PRIMARY KEY,
+        bot_id VARCHAR(36) NOT NULL,
+        name VARCHAR(32) NOT NULL,
+        description VARCHAR(200) NOT NULL,
+        \`usage\` VARCHAR(200),
+        cooldown INT DEFAULT 0,
+        permissions INT DEFAULT 0,
+        is_enabled TINYINT(1) DEFAULT 1,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS bot_servers (
+        bot_id VARCHAR(36) NOT NULL,
+        server_id VARCHAR(36) NOT NULL,
+        permissions INT DEFAULT 0,
+        added_at DATETIME NOT NULL,
+        PRIMARY KEY (bot_id, server_id),
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS bot_certifications (
+        id VARCHAR(36) PRIMARY KEY,
+        bot_id VARCHAR(36) NOT NULL,
+        owner_id VARCHAR(36) NOT NULL,
+        reason TEXT NOT NULL,
+        status ENUM('pending','approved','rejected') DEFAULT 'pending',
+        reviewer_id VARCHAR(36),
+        review_note VARCHAR(500),
+        created_at DATETIME NOT NULL,
+        reviewed_at DATETIME,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+      )
+    `);
+    logger.info('Tables vérifiées/créées');
+
     // Connexion Redis
     redisClient = createClient({
       url: process.env.REDIS_URL || 'redis://localhost:6379'

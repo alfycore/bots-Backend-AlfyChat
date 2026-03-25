@@ -1,8 +1,10 @@
 // ==========================================
-// ALFYCHAT - TYPES BOTS
+// ALFYCHAT - TYPES BOTS (v2)
 // ==========================================
 
 export type BotStatus = 'online' | 'offline' | 'maintenance';
+
+export type CertificationStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 export interface Bot {
   id: string;
@@ -14,6 +16,15 @@ export interface Bot {
   prefix: string;
   status: BotStatus;
   isPublic: boolean;
+  isVerified: boolean;
+  certificationStatus: CertificationStatus;
+  certificationNote?: string;
+  inviteCount: number;
+  serverCount: number;
+  tags: string[];
+  websiteUrl?: string;
+  supportServerUrl?: string;
+  privacyPolicyUrl?: string;
   servers: string[];
   commands: BotCommand[];
   createdAt: Date;
@@ -38,6 +49,18 @@ export interface CreateBotDTO {
   prefix?: string;
 }
 
+export interface UpdateBotDTO {
+  name?: string;
+  description?: string;
+  avatarUrl?: string;
+  prefix?: string;
+  isPublic?: boolean;
+  tags?: string[];
+  websiteUrl?: string;
+  supportServerUrl?: string;
+  privacyPolicyUrl?: string;
+}
+
 export interface CreateCommandDTO {
   botId: string;
   name: string;
@@ -51,4 +74,15 @@ export interface AddBotToServerDTO {
   botId: string;
   serverId: string;
   permissions: number;
+}
+
+export interface CertificationRequestDTO {
+  botId: string;
+  reason: string;
+}
+
+export interface CertificationReviewDTO {
+  requestId: string;
+  status: 'approved' | 'rejected';
+  note?: string;
 }
