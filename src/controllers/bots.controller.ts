@@ -13,7 +13,7 @@ export class BotsController {
 
   async create(req: AuthRequest, res: Response) {
     try {
-      const userId = req.body.ownerId || req.userId;
+      const userId = req.userId;
       if (!userId) return res.status(401).json({ error: 'Non authentifié' });
       const { name, description, prefix } = req.body;
 
@@ -74,7 +74,7 @@ export class BotsController {
   async update(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId || req.headers['x-user-id'] as string;
       const updates = req.body;
 
       const bot = await botsService.update(id, userId, updates);
@@ -89,7 +89,7 @@ export class BotsController {
   async delete(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId || req.headers['x-user-id'] as string;
       const deleted = await botsService.delete(id, userId);
       if (!deleted) return res.status(404).json({ error: 'Bot non trouvé ou non autorisé' });
       res.json({ success: true });
