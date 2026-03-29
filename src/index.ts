@@ -11,7 +11,7 @@ import mysql, { Pool } from 'mysql2/promise';
 import { createClient, RedisClientType } from 'redis';
 import winston from 'winston';
 import { botsRouter } from './routes';
-import { startServiceRegistration, serviceMetricsMiddleware } from './utils/service-client';
+import { startServiceRegistration, serviceMetricsMiddleware, collectServiceMetrics } from './utils/service-client';
 
 dotenv.config();
 
@@ -153,6 +153,16 @@ async function startService() {
     // Health check
     app.get('/health', (req, res) => {
       res.json({ status: 'ok', service: 'bots' });
+    });
+
+    app.get('/metrics', (req, res) => {
+      res.json({
+        service: 'bots',
+        serviceId: process.env.SERVICE_ID || 'bots-default',
+        location: (process.env.SERVICE_LOCATION || 'EU').toUpperCase(),
+        ...collectServiceMetrics(),
+        uptime: process.uptime(),
+      });
     });
 
     const PORT = process.env.PORT || 3006;
