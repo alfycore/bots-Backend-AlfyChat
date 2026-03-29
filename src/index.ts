@@ -11,6 +11,7 @@ import mysql, { Pool } from 'mysql2/promise';
 import { createClient, RedisClientType } from 'redis';
 import winston from 'winston';
 import { botsRouter } from './routes';
+import { startServiceRegistration, serviceMetricsMiddleware } from './utils/service-client';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use(cors({
 }));
 app.use(helmet());
 app.use(express.json());
+app.use(serviceMetricsMiddleware);
 
 const logger = winston.createLogger({
   level: 'info',
@@ -156,6 +158,7 @@ async function startService() {
     const PORT = process.env.PORT || 3006;
     app.listen(PORT, () => {
       logger.info(`Service Bots démarré sur le port ${PORT}`);
+      startServiceRegistration('bots');
     });
 
   } catch (error) {
