@@ -29,7 +29,7 @@ export class BotsController {
   async getById(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
 
       const bot = await botsService.getById(id, false);
       if (!bot) return res.status(404).json({ error: 'Bot non trouvé' });
@@ -47,7 +47,7 @@ export class BotsController {
 
   async getMyBots(req: AuthRequest, res: Response) {
     try {
-      const userId = req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       if (!userId) return res.status(401).json({ error: 'Non authentifié' });
       const bots = await botsService.getByOwner(userId);
       res.json({ bots });
@@ -74,7 +74,7 @@ export class BotsController {
   async update(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const updates = req.body;
 
       const bot = await botsService.update(id, userId, updates);
@@ -89,7 +89,7 @@ export class BotsController {
   async delete(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const deleted = await botsService.delete(id, userId);
       if (!deleted) return res.status(404).json({ error: 'Bot non trouvé ou non autorisé' });
       res.json({ success: true });
@@ -102,7 +102,7 @@ export class BotsController {
   async regenerateToken(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const newToken = await botsService.regenerateToken(id, userId);
       if (!newToken) return res.status(404).json({ error: 'Bot non trouvé ou non autorisé' });
       res.json({ token: newToken });
@@ -116,7 +116,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
 
       const bot = await botsService.getById(id);
       if (!bot || bot.ownerId !== userId) {
@@ -148,7 +148,7 @@ export class BotsController {
   async createCommand(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const { name, description, usage, cooldown, permissions } = req.body;
 
       const bot = await botsService.getById(id);
@@ -167,7 +167,7 @@ export class BotsController {
   async updateCommand(req: AuthRequest, res: Response) {
     try {
       const { id, commandId } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const updates = req.body;
 
       const bot = await botsService.getById(id);
@@ -186,7 +186,7 @@ export class BotsController {
   async deleteCommand(req: AuthRequest, res: Response) {
     try {
       const { id, commandId } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
 
       const bot = await botsService.getById(id);
       if (!bot || bot.ownerId !== userId) {
@@ -253,7 +253,7 @@ export class BotsController {
   async requestCertification(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const userId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const userId = req.userId;
       const { reason } = req.body;
 
       const result = await botsService.requestCertification({ botId: id, reason }, userId);
@@ -278,7 +278,7 @@ export class BotsController {
   async reviewCertification(req: AuthRequest, res: Response) {
     try {
       const { requestId } = req.params;
-      const reviewerId = req.body.ownerId || req.userId || req.headers['x-user-id'] as string;
+      const reviewerId = req.userId;
       const { status, note } = req.body;
 
       const reviewed = await botsService.reviewCertification({ requestId, status, note }, reviewerId);

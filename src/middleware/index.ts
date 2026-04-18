@@ -3,3 +3,4 @@
 // ==========================================
 
 export { validateRequest } from './validate';
+export { authMiddleware } from './auth';

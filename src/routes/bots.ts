@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import { body, param, query } from 'express-validator';
 import { botsController } from '../controllers';
-import { validateRequest } from '../middleware';
+import { validateRequest, authMiddleware } from '../middleware';
 
 const router = Router();
 
@@ -14,6 +14,7 @@ const router = Router();
 // ==========================================
 
 router.post('/',
+  authMiddleware,
   body('name').isString().isLength({ min: 2, max: 32 }).withMessage('Nom requis (2-32 caractères)'),
   body('description').optional().isString().isLength({ max: 500 }),
   body('prefix').optional().isString().isLength({ min: 1, max: 5 }),
@@ -22,6 +23,7 @@ router.post('/',
 );
 
 router.get('/me',
+  authMiddleware,
   (req, res) => botsController.getMyBots(req, res)
 );
 
@@ -42,6 +44,7 @@ router.get('/:id',
 );
 
 router.patch('/:id',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   body('name').optional().isString().isLength({ min: 2, max: 32 }),
   body('description').optional().isString().isLength({ max: 500 }),
@@ -56,18 +59,21 @@ router.patch('/:id',
 );
 
 router.delete('/:id',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   validateRequest,
   (req, res) => botsController.delete(req, res)
 );
 
 router.post('/:id/regenerate-token',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   validateRequest,
   (req, res) => botsController.regenerateToken(req, res)
 );
 
 router.patch('/:id/status',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   body('status').isIn(['online', 'offline', 'maintenance']).withMessage('Statut invalide'),
   validateRequest,
@@ -85,6 +91,7 @@ router.get('/:id/commands',
 );
 
 router.post('/:id/commands',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   body('name').isString().isLength({ min: 1, max: 32 }).withMessage('Nom requis'),
   body('description').isString().isLength({ min: 1, max: 200 }).withMessage('Description requise'),
@@ -96,6 +103,7 @@ router.post('/:id/commands',
 );
 
 router.patch('/:id/commands/:commandId',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   param('commandId').isUUID().withMessage('ID de commande invalide'),
   body('name').optional().isString().isLength({ min: 1, max: 32 }),
@@ -109,6 +117,7 @@ router.patch('/:id/commands/:commandId',
 );
 
 router.delete('/:id/commands/:commandId',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   param('commandId').isUUID().withMessage('ID de commande invalide'),
   validateRequest,
@@ -120,6 +129,7 @@ router.delete('/:id/commands/:commandId',
 // ==========================================
 
 router.post('/:id/servers',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   body('serverId').isUUID().withMessage('ID de serveur invalide'),
   body('permissions').optional().isInt({ min: 0 }),
@@ -128,6 +138,7 @@ router.post('/:id/servers',
 );
 
 router.delete('/:id/servers/:serverId',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   param('serverId').isUUID().withMessage('ID de serveur invalide'),
   validateRequest,
@@ -145,6 +156,7 @@ router.get('/servers/:serverId',
 // ==========================================
 
 router.post('/:id/certification',
+  authMiddleware,
   param('id').isUUID().withMessage('ID de bot invalide'),
   body('reason').isString().isLength({ min: 10, max: 1000 }).withMessage('Raison requise (10-1000 caractères)'),
   validateRequest,
@@ -152,10 +164,12 @@ router.post('/:id/certification',
 );
 
 router.get('/certification/pending',
+  authMiddleware,
   (req, res) => botsController.getPendingCertifications(req, res)
 );
 
 router.post('/certification/:requestId/review',
+  authMiddleware,
   param('requestId').isUUID().withMessage('ID de demande invalide'),
   body('status').isIn(['approved', 'rejected']).withMessage('Statut invalide'),
   body('note').optional().isString().isLength({ max: 500 }),
