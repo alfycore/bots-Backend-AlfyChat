@@ -3,17 +3,15 @@
 // Gestion des bots et de leurs permissions
 // ==========================================
 
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import mysql, { Pool } from 'mysql2/promise';
 import { createClient, RedisClientType } from 'redis';
 import winston from 'winston';
 import { botsRouter } from './routes';
 import { startServiceRegistration, serviceMetricsMiddleware, collectServiceMetrics } from './utils/service-client';
-
-dotenv.config();
 
 const _allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:4000')
   .split(',').map((o) => o.trim());
@@ -138,14 +136,40 @@ async function startService() {
     `);
     logger.info('Tables vérifiées/créées');
 
-    // Connexion Redis
-    redisClient = createClient({
-      url: process.env.REDIS_URL || 'redis://localhost:6379'
-    });
-    
-    redisClient.on('error', (err: Error) => logger.error('Redis Client Error', err));
-    await redisClient.connect();
-    logger.info('Connexion Redis établie');
+    // Connexion Redis — supporte REDIS_URL ou REDIS_HOST/REDIS_PORT/REDIS_PASSWORD
+    function buildRedisUrl(): string {
+      if (process.env.REDIS_URL) return process.env.REDIS_URL;
+      const host = process.env.REDIS_HOST;
+      const port = process.env.REDIS_PORT || '6379';
+      const password = process.env.REDIS_PASSWORD;
+      if (!host) return 'redis://localhost:6379';
+      if (password) return `redis://${encodeURIComponent(password)}@${host}:${port}`;
+      return `redis://${host}:${port}`;
+    }
+
+    async function connectRedisWithRetry(retries = 5, baseDelay = 1000) {
+      const url = buildRedisUrl();
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        let client;
+        try {
+          client = createClient({ url });
+          client.on('error', (err: Error) => logger.error('Redis Client Error', err));
+          await client.connect();
+          logger.info(`Connexion Redis établie (host=${process.env.REDIS_HOST || 'from REDIS_URL'} port=${process.env.REDIS_PORT || 'unknown'})`);
+          return client;
+        } catch (err: any) {
+          logger.warn(`Échec connexion Redis (tentative ${attempt}/${retries}): ${err && err.message ? err.message : err}`);
+          try { if (client) await client.quit(); } catch (_) { /* ignore */ }
+          if (attempt < retries) {
+            await new Promise((r) => setTimeout(r, baseDelay * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
+
+    redisClient = await connectRedisWithRetry();
 
     // Routes
     app.use('/bots', botsRouter);
