@@ -26,23 +26,29 @@ export class BotsService {
     return crypto.randomBytes(32).toString('hex');
   }
 
+  generateClientSecret(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
   // ==========================================
   // MAPPERS
   // ==========================================
 
-  private mapBot(row: any, servers: string[], commands: BotCommand[], includeToken = false): Bot {
+  private mapBot(row: any, servers: string[], commands: BotCommand[], includeToken = false, includeSecret = false): Bot {
     let tags: string[] = [];
-    try {
-      tags = row.tags ? JSON.parse(row.tags) : [];
-    } catch { tags = []; }
+    try { tags = row.tags ? JSON.parse(row.tags) : []; } catch { tags = []; }
 
-    return {
+    let redirectUris: string[] = [];
+    try { redirectUris = row.redirect_uris ? JSON.parse(row.redirect_uris) : []; } catch { redirectUris = []; }
+
+    const bot: Bot = {
       id: row.id,
       ownerId: row.owner_id,
       name: row.name,
       description: row.description,
       avatarUrl: row.avatar_url,
       token: includeToken ? row.token : '[HIDDEN]',
+      redirectUris,
       prefix: row.prefix,
       status: row.status as BotStatus,
       isPublic: !!row.is_public,
@@ -60,6 +66,12 @@ export class BotsService {
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
+
+    if (includeSecret && row.client_secret) {
+      bot.clientSecret = row.client_secret;
+    }
+
+    return bot;
   }
 
   // ==========================================
@@ -69,13 +81,14 @@ export class BotsService {
   async create(data: CreateBotDTO): Promise<Bot> {
     const id = uuidv4();
     const token = this.generateBotToken();
+    const clientSecret = this.generateClientSecret();
     const now = new Date();
 
     await this.db.execute(
-      `INSERT INTO bots (id, owner_id, name, description, token, prefix, status, is_public, is_verified,
-        certification_status, invite_count, tags, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'offline', 0, 0, 'none', 0, '[]', ?, ?)`,
-      [id, data.ownerId, data.name, data.description || null, token, data.prefix || '!', now, now]
+      `INSERT INTO bots (id, owner_id, name, description, token, client_secret, redirect_uris, prefix, status,
+        is_public, is_verified, certification_status, invite_count, tags, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, '[]', ?, 'offline', 0, 0, 'none', 0, '[]', ?, ?)`,
+      [id, data.ownerId, data.name, data.description || null, token, clientSecret, data.prefix || '!', now, now]
     );
 
     return {
@@ -84,6 +97,8 @@ export class BotsService {
       name: data.name,
       description: data.description,
       token,
+      clientSecret,
+      redirectUris: [],
       prefix: data.prefix || '!',
       status: 'offline',
       isPublic: false,
@@ -221,8 +236,12 @@ export class BotsService {
       [status, new Date(), id]
     );
 
-    await this.redis.set(`bot:${id}:status`, status);
-    await this.redis.publish('bot:status', JSON.stringify({ botId: id, status }));
+    if (this.redis) {
+      try {
+        await this.redis.set(`bot:${id}:status`, status);
+        await this.redis.publish('bot:status', JSON.stringify({ botId: id, status }));
+      } catch {}
+    }
 
     return true;
   }
@@ -327,7 +346,9 @@ export class BotsService {
     // Incrementer invite_count
     await this.db.execute(`UPDATE bots SET invite_count = invite_count + 1 WHERE id = ?`, [data.botId]);
 
-    await this.redis.publish('bot:joined', JSON.stringify({ botId: data.botId, serverId: data.serverId }));
+    if (this.redis) {
+      try { await this.redis.publish('bot:joined', JSON.stringify({ botId: data.botId, serverId: data.serverId })); } catch {}
+    }
     return true;
   }
 
@@ -337,7 +358,9 @@ export class BotsService {
       [botId, serverId]
     );
     if ((result as any).affectedRows > 0) {
-      await this.redis.publish('bot:left', JSON.stringify({ botId, serverId }));
+      if (this.redis) {
+        try { await this.redis.publish('bot:left', JSON.stringify({ botId, serverId })); } catch {}
+      }
       return true;
     }
     return false;

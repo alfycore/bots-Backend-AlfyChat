@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { body, param, query } from 'express-validator';
 import { botsController } from '../controllers';
+import { oauth2Controller } from '../controllers/oauth2.controller';
 import { validateRequest, authMiddleware } from '../middleware';
 
 const router = Router();
@@ -149,6 +150,32 @@ router.get('/servers/:serverId',
   param('serverId').isUUID().withMessage('ID de serveur invalide'),
   validateRequest,
   (req, res) => botsController.getBotsInServer(req, res)
+);
+
+// ==========================================
+// ROUTES OAUTH2 (spécifiques au bot)
+// ==========================================
+
+router.get('/:id/oauth2',
+  authMiddleware,
+  param('id').isUUID().withMessage('ID de bot invalide'),
+  validateRequest,
+  (req, res) => oauth2Controller.getConfig(req, res)
+);
+
+router.post('/:id/oauth2/regenerate-secret',
+  authMiddleware,
+  param('id').isUUID().withMessage('ID de bot invalide'),
+  validateRequest,
+  (req, res) => oauth2Controller.regenerateSecret(req, res)
+);
+
+router.patch('/:id/oauth2/redirect-uris',
+  authMiddleware,
+  param('id').isUUID().withMessage('ID de bot invalide'),
+  body('redirectUris').isArray({ max: 5 }).withMessage('Max 5 URIs'),
+  validateRequest,
+  (req, res) => oauth2Controller.updateRedirectUris(req, res)
 );
 
 // ==========================================

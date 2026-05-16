@@ -12,7 +12,7 @@ import helmet from 'helmet';
 import mysql, { Pool } from 'mysql2/promise';
 import { createClient, RedisClientType } from 'redis';
 import winston from 'winston';
-import { botsRouter } from './routes';
+import { botsRouter, oauth2Router } from './routes';
 import { startServiceRegistration, serviceMetricsMiddleware, collectServiceMetrics } from './utils/service-client';
 
 const _allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:4000')
@@ -142,43 +142,101 @@ async function startService() {
     `);
     logger.info('Tables vérifiées/créées');
 
-    // Connexion Redis — supporte REDIS_URL ou REDIS_HOST/REDIS_PORT/REDIS_PASSWORD
-    function buildRedisUrl(): string {
-      if (process.env.REDIS_URL) return process.env.REDIS_URL;
-      const host = process.env.REDIS_HOST;
-      const port = process.env.REDIS_PORT || '6379';
-      const password = process.env.REDIS_PASSWORD;
-      if (!host) return 'redis://localhost:6379';
-      if (password) return `redis://${encodeURIComponent(password)}@${host}:${port}`;
-      return `redis://${host}:${port}`;
+    // Migrations OAuth2 (idempotentes)
+    // Note : pas de clause AFTER pour éviter les échecs si la colonne de référence n'existe pas encore
+    try {
+      await pool.execute(`ALTER TABLE bots ADD COLUMN client_secret VARCHAR(64)`);
+      logger.info('Migration: colonne client_secret ajoutée');
+    } catch (e: any) {
+      if (!String(e?.message).toLowerCase().includes('duplicate')) {
+        logger.warn(`Migration client_secret: ${e?.message}`);
+      }
     }
-
-    async function connectRedisWithRetry(retries = 5, baseDelay = 1000) {
-      const url = buildRedisUrl();
-      for (let attempt = 1; attempt <= retries; attempt++) {
-        let client;
-        try {
-          client = createClient({ url });
-          client.on('error', (err: Error) => logger.error('Redis Client Error', err));
-          await client.connect();
-          logger.info(`Connexion Redis établie (host=${process.env.REDIS_HOST || 'from REDIS_URL'} port=${process.env.REDIS_PORT || 'unknown'})`);
-          return client;
-        } catch (err: any) {
-          logger.warn(`Échec connexion Redis (tentative ${attempt}/${retries}): ${err && err.message ? err.message : err}`);
-          try { if (client) await client.quit(); } catch (_) { /* ignore */ }
-          if (attempt < retries) {
-            await new Promise((r) => setTimeout(r, baseDelay * attempt));
-            continue;
-          }
-          throw err;
-        }
+    try {
+      await pool.execute(`ALTER TABLE bots ADD COLUMN redirect_uris JSON`);
+      logger.info('Migration: colonne redirect_uris ajoutée');
+    } catch (e: any) {
+      if (!String(e?.message).toLowerCase().includes('duplicate')) {
+        logger.warn(`Migration redirect_uris: ${e?.message}`);
       }
     }
 
-    redisClient = await connectRedisWithRetry();
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS oauth2_codes (
+        code VARCHAR(64) PRIMARY KEY,
+        bot_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        server_id VARCHAR(36),
+        scopes JSON NOT NULL,
+        redirect_uri VARCHAR(500) NOT NULL,
+        permissions INT DEFAULT 0,
+        expires_at DATETIME NOT NULL,
+        used TINYINT(1) DEFAULT 0,
+        created_at DATETIME NOT NULL,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS oauth2_tokens (
+        access_token VARCHAR(64) PRIMARY KEY,
+        bot_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        server_id VARCHAR(36),
+        scopes JSON NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME NOT NULL,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Backfill client_secret pour les bots existants
+    const [botsNeedingSecret] = await pool.execute(`SELECT id FROM bots WHERE client_secret IS NULL`);
+    const crypto = await import('crypto');
+    for (const row of (botsNeedingSecret as any[])) {
+      const secret = crypto.default.randomBytes(32).toString('hex');
+      await pool.execute(`UPDATE bots SET client_secret = ? WHERE id = ?`, [secret, row.id]);
+    }
+    if ((botsNeedingSecret as any[]).length > 0) {
+      logger.info(`Backfill client_secret: ${(botsNeedingSecret as any[]).length} bot(s) mis à jour`);
+    }
+    logger.info('Migrations OAuth2 appliquées');
+
+    // Connexion Redis — optionnelle, le service continue sans Redis si AUTH échoue
+    try {
+      const host = process.env.REDIS_HOST || 'localhost';
+      const port = parseInt(process.env.REDIS_PORT || '6379');
+      const password = process.env.REDIS_PASSWORD;
+      const clientConfig: any = {
+        socket: {
+          host,
+          port,
+          // Ne jamais réessayer : si la connexion échoue, on continue sans Redis
+          reconnectStrategy: () => false,
+          connectTimeout: 5000,
+        },
+      };
+      if (process.env.REDIS_URL) {
+        delete clientConfig.socket;
+        clientConfig.url = process.env.REDIS_URL;
+      } else if (password) {
+        clientConfig.password = password;
+      }
+
+      const client = createClient(clientConfig);
+      // Absorber les erreurs de client sans polluer les logs (AUTH peut échouer)
+      client.on('error', () => {});
+      await client.connect();
+      // Vérifier que l'auth fonctionne vraiment avec un PING
+      await client.ping();
+      redisClient = client as RedisClientType;
+      logger.info(`Connexion Redis établie (host=${host} port=${port})`);
+    } catch (redisErr: any) {
+      logger.warn(`Redis indisponible (${redisErr?.message || redisErr}) — le service continue sans Redis`);
+    }
 
     // Routes
     app.use('/bots', botsRouter);
+    app.use('/oauth2', oauth2Router);
 
     // Health check
     app.get('/health', (req, res) => {
