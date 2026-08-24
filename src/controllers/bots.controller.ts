@@ -30,6 +30,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
 
       const bot = await botsService.getById(id, false);
       if (!bot) return res.status(404).json({ error: 'Bot non trouvé' });
@@ -75,6 +76,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
       const updates = req.body;
 
       const bot = await botsService.update(id, userId, updates);
@@ -90,6 +92,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
       const deleted = await botsService.delete(id, userId);
       if (!deleted) return res.status(404).json({ error: 'Bot non trouvé ou non autorisé' });
       res.json({ success: true });
@@ -103,6 +106,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
       const newToken = await botsService.regenerateToken(id, userId);
       if (!newToken) return res.status(404).json({ error: 'Bot non trouvé ou non autorisé' });
       res.json({ token: newToken });
@@ -149,6 +153,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
       const { name, description, usage, cooldown, permissions } = req.body;
 
       const bot = await botsService.getById(id);
@@ -254,6 +259,7 @@ export class BotsController {
     try {
       const { id } = req.params;
       const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
       const { reason } = req.body;
 
       const result = await botsService.requestCertification({ botId: id, reason }, userId);
@@ -279,6 +285,7 @@ export class BotsController {
     try {
       const { requestId } = req.params;
       const reviewerId = req.userId;
+      if (!reviewerId) return res.status(401).json({ error: 'Authentification requise' });
       const { status, note } = req.body;
 
       const reviewed = await botsService.reviewCertification({ requestId, status, note }, reviewerId);

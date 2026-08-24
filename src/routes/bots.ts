@@ -29,8 +29,11 @@ router.get('/me',
 );
 
 router.get('/public',
-  query('search').optional().isString(),
-  query('tag').optional().isString(),
+  query('search').optional().isString().isLength({ max: 100 }),
+  query('tag').optional().isString().isLength({ max: 50 }),
+  // `validateRequest` manquait : les validateurs s'exécutaient mais leur
+  // résultat n'était jamais lu, donc jamais appliqué.
+  validateRequest,
   (req, res) => botsController.getPublicBots(req, res)
 );
 
