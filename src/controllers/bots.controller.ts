@@ -5,6 +5,7 @@
 import { Response } from 'express';
 import { botsService } from '../services';
 import { AuthRequest, CreateBotDTO, CreateCommandDTO, AddBotToServerDTO, BotStatus } from '../types';
+import { canManageServerBots, isPlatformAdmin, sanitizeBotPermissions } from '../utils/server-perms';
 
 export class BotsController {
   // ==========================================
@@ -214,11 +215,19 @@ export class BotsController {
     try {
       const { id } = req.params;
       const { serverId, permissions } = req.body;
+      const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
 
       const bot = await botsService.getById(id);
       if (!bot) return res.status(404).json({ error: 'Bot non trouvé' });
 
-      const data: AddBotToServerDTO = { botId: id, serverId, permissions: permissions || 0 };
+      // Aucun contrôle auparavant : n'importe qui installait n'importe quel bot
+      // (avec les permissions de son choix) sur n'importe quel serveur.
+      if (!(await canManageServerBots(userId, serverId))) {
+        return res.status(403).json({ error: 'Droits d\'administration du serveur requis' });
+      }
+
+      const data: AddBotToServerDTO = { botId: id, serverId, permissions: sanitizeBotPermissions(permissions) };
       const added = await botsService.addToServer(data);
       if (!added) return res.status(400).json({ error: 'Le bot est déjà sur ce serveur' });
       res.status(201).json({ success: true });
@@ -231,6 +240,15 @@ export class BotsController {
   async removeFromServer(req: AuthRequest, res: Response) {
     try {
       const { id, serverId } = req.params;
+      const userId = req.userId;
+      if (!userId) return res.status(401).json({ error: 'Authentification requise' });
+      // Le propriétaire du bot ou un administrateur du serveur uniquement
+      // (n'importe quel compte retirait n'importe quel bot de n'importe où).
+      const bot = await botsService.getById(id);
+      if (!bot) return res.status(404).json({ error: 'Bot non trouvé' });
+      if ((bot as any).ownerId !== userId && !(await canManageServerBots(userId, serverId))) {
+        return res.status(403).json({ error: 'Non autorisé' });
+      }
       const removed = await botsService.removeFromServer(id, serverId);
       if (!removed) return res.status(404).json({ error: 'Bot non trouvé sur ce serveur' });
       res.json({ success: true });
@@ -273,6 +291,9 @@ export class BotsController {
 
   async getPendingCertifications(req: AuthRequest, res: Response) {
     try {
+      if (!(await isPlatformAdmin(req.userId))) {
+        return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      }
       const certifications = await botsService.getPendingCertifications();
       res.json({ certifications });
     } catch (error) {
@@ -286,6 +307,10 @@ export class BotsController {
       const { requestId } = req.params;
       const reviewerId = req.userId;
       if (!reviewerId) return res.status(401).json({ error: 'Authentification requise' });
+      // N'importe quel compte pouvait certifier un bot — y compris le sien.
+      if (!(await isPlatformAdmin(reviewerId))) {
+        return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      }
       const { status, note } = req.body;
 
       const reviewed = await botsService.reviewCertification({ requestId, status, note }, reviewerId);

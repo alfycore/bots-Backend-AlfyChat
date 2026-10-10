@@ -7,6 +7,23 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../index';
 import { botsService } from './bots.service';
+import { canManageServerBots, sanitizeBotPermissions } from '../utils/server-perms';
+
+/**
+ * URI de redirection acceptable : https, ou http limité à localhost / 127.0.0.1
+ * (développement). L'ancien `startsWith('http://localhost')` acceptait
+ * `http://localhost.attaquant.com`.
+ */
+function isAcceptableRedirectUri(uri: string): boolean {
+  try {
+    const u = new URL(uri);
+    if (u.username || u.password || u.hash) return false;
+    if (u.protocol === 'https:') return true;
+    return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
 import {
   PublicApp, OAuth2AuthorizeDTO, OAuth2TokenExchangeDTO, OAuth2Scope,
 } from '../types';
@@ -108,8 +125,7 @@ export class OAuth2Service {
 
     if (uris.length > 5) return null;
     for (const uri of uris) {
-      if (!uri.startsWith('https://') && !uri.startsWith('http://localhost')) return null;
-      if (uri.length > 500) return null;
+      if (typeof uri !== 'string' || uri.length > 500 || !isAcceptableRedirectUri(uri)) return null;
     }
 
     const validUris = uris.filter(u => u.trim().length > 0);
@@ -135,6 +151,14 @@ export class OAuth2Service {
     if (!app) return null;
 
     if (!app.redirectUris.includes(data.redirectUri)) return null;
+
+    // Le scope `bot` installe le bot sur `serverId` : l'utilisateur qui
+    // autorise doit administrer ce serveur (n'importe qui pouvait installer
+    // son bot, avec les permissions de son choix, sur n'importe quel serveur).
+    data = { ...data, permissions: sanitizeBotPermissions(data.permissions) };
+    if (data.scopes.includes('bot')) {
+      if (!data.serverId || !(await canManageServerBots(data.userId, data.serverId))) return null;
+    }
 
     const code = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
