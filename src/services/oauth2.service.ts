@@ -145,6 +145,25 @@ export class OAuth2Service {
   // FLOW AUTHORIZATION CODE
   // ==========================================
 
+  /**
+   * Installation simple d'un bot (scope `bot` seul, sans redirect_uri) :
+   * aucun code n'est émis puisqu'il n'y a personne à qui le renvoyer. Mêmes
+   * garde-fous que `generateCode` : application existante, permissions
+   * assainies, utilisateur capable de gérer les bots du serveur.
+   */
+  async installBot(data: { clientId: string; userId: string; serverId?: string; permissions: number }): Promise<boolean> {
+    const app = await this.getPublicApp(data.clientId);
+    if (!app || !data.serverId) return false;
+    if (!(await canManageServerBots(data.userId, data.serverId))) return false;
+
+    await botsService.addToServer({
+      botId: data.clientId,
+      serverId: data.serverId,
+      permissions: sanitizeBotPermissions(data.permissions),
+    });
+    return true;
+  }
+
   async generateCode(data: OAuth2AuthorizeDTO): Promise<string | null> {
     // Valider le client_id et la redirect_uri
     const app = await this.getPublicApp(data.clientId);

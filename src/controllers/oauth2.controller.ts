@@ -27,8 +27,28 @@ export class OAuth2Controller {
       const userId = (req as any).userId;
       const { clientId, serverId, redirectUri, scopes, permissions, state } = req.body;
 
-      if (!clientId || !redirectUri || !scopes || !Array.isArray(scopes)) {
+      if (!clientId || !scopes || !Array.isArray(scopes)) {
         res.status(400).json({ error: 'Paramètres manquants' });
+        return;
+      }
+
+      // Lien d'ajout simple (alfy.chat/b/ID) : scope `bot` seul, sans redirection.
+      if (!redirectUri) {
+        if (scopes.length !== 1 || scopes[0] !== 'bot') {
+          res.status(400).json({ error: 'redirect_uri requis pour ces scopes' });
+          return;
+        }
+        const installed = await oauth2Service.installBot({
+          clientId,
+          userId,
+          serverId: serverId || undefined,
+          permissions: parseInt(permissions) || 0,
+        });
+        if (!installed) {
+          res.status(400).json({ error: 'Autorisation refusée' });
+          return;
+        }
+        res.json({ installed: true, serverId });
         return;
       }
 
