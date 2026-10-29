@@ -22,6 +22,9 @@ type Auth struct {
 	// (on retire seulement "Bearer ") et répondent "Token invalide" même sur
 	// un jeton expiré.
 	Loose bool
+	// InternalWithoutUser : un appel interne sans x-user-id passe quand même
+	// (userId vide), pour les routes en lecture seule du gateway.
+	InternalWithoutUser bool
 }
 
 // NewAuth refuse de démarrer sans JWT_SECRET ni INTERNAL_SECRET.
@@ -57,6 +60,10 @@ func (a *Auth) Require(next http.HandlerFunc) http.HandlerFunc {
 				next(w, WithUserID(r, uid))
 				return
 			}
+			if a.InternalWithoutUser {
+				next(w, r)
+				return
+			}
 		}
 
 		header := r.Header.Get("Authorization")
@@ -80,7 +87,8 @@ func (a *Auth) Require(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		uid, _ := claims["userId"].(string)
-		if uid == "" {
+		// En mode Loose, un jeton valide sans userId passe avec un userId vide.
+		if uid == "" && !a.Loose {
 			Error(w, http.StatusUnauthorized, "Token invalide")
 			return
 		}

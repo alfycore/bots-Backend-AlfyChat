@@ -240,6 +240,15 @@ func Error(w http.ResponseWriter, status int, msg string) {
 	JSON(w, status, O("error", msg))
 }
 
+// JSONString sérialise comme JSON.stringify (sans échappement HTML).
+func JSONString(v any) string {
+	b, err := marshalNoEscape(v)
+	if err != nil {
+		return "null"
+	}
+	return string(b)
+}
+
 func marshalNoEscape(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

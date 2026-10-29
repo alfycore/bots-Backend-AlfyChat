@@ -13,9 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// OpenRedis se connecte via REDIS_URL, sinon REDIS_HOST/PORT/PASSWORD, et
-// vérifie la connexion par un PING (5 s max).
-func OpenRedis() (*redis.Client, error) {
+func redisOptions() (*redis.Options, error) {
 	var opts *redis.Options
 	if u := Env("REDIS_URL", ""); u != "" {
 		var err error
@@ -29,6 +27,15 @@ func OpenRedis() (*redis.Client, error) {
 		}
 	}
 	opts.DialTimeout = 5 * time.Second
+	return opts, nil
+}
+
+// OpenRedis se connecte et vérifie la connexion par un PING (5 s max).
+func OpenRedis() (*redis.Client, error) {
+	opts, err := redisOptions()
+	if err != nil {
+		return nil, err
+	}
 	client := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -37,4 +44,15 @@ func OpenRedis() (*redis.Client, error) {
 		return nil, err
 	}
 	return client, nil
+}
+
+// NewRedis crée le client sans le tester : il se reconnecte seul, comme
+// ioredis, et le service démarre même si Redis est momentanément absent.
+func NewRedis() (*redis.Client, error) {
+	opts, err := redisOptions()
+	if err != nil {
+		return nil, err
+	}
+	opts.MaxRetries = -1
+	return redis.NewClient(opts), nil
 }

@@ -28,6 +28,11 @@ func OpenDatabase() (*DB, error) {
 // OpenDatabaseWithDefaults : identifiants par défaut propres au service
 // quand DB_USER / DB_PASSWORD sont absents.
 func OpenDatabaseWithDefaults(defUser, defPassword string) (*DB, error) {
+	return OpenDatabaseSized(defUser, defPassword, 10)
+}
+
+// OpenDatabaseSized : comme OpenDatabaseWithDefaults avec une taille de pool.
+func OpenDatabaseSized(defUser, defPassword string, poolSize int) (*DB, error) {
 	cfg := mysql.NewConfig()
 	cfg.Net = "tcp"
 	cfg.Addr = fmt.Sprintf("%s:%d", Env("DB_HOST", "localhost"), EnvInt("DB_PORT", 3306))
@@ -45,8 +50,8 @@ func OpenDatabaseWithDefaults(defUser, defPassword string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	pool.SetMaxOpenConns(10)
-	pool.SetMaxIdleConns(10)
+	pool.SetMaxOpenConns(poolSize)
+	pool.SetMaxIdleConns(poolSize)
 	pool.SetConnMaxIdleTime(60 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
