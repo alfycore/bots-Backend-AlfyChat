@@ -1,7 +1,5 @@
-.env
-.env.*
-node_modules
 .git
-.gitignore
-*.log
+.env
+bin
+node_modules
 dist

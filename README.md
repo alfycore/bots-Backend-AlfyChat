@@ -2,8 +2,7 @@
 
 Microservice de gestion des bots pour AlfyChat.
 
-![Node.js](https://img.shields.io/badge/Bun-1.2-black?logo=bun)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)
 ![License](https://img.shields.io/badge/License-Source_Available-blue)
 
 ## Rôle
@@ -14,10 +13,9 @@ Ce service gère les comptes bots, leurs tokens d'accès, et les interactions bo
 
 | Catégorie | Technologies |
 |-----------|-------------|
-| Runtime | Bun |
-| Langage | TypeScript |
-| API | Express |
-| Auth | JWT |
+| Langage | Go 1.26 |
+| API | net/http (stdlib) |
+| Auth | JWT HS256 (golang-jwt) |
 | Cache | Redis |
 | Base de données | MySQL 8 |
 
@@ -38,7 +36,7 @@ Frontend (:4000)  →  Gateway (:3000)  →  Microservices
 
 ### Prérequis
 
-- [Bun](https://bun.sh/) ≥ 1.2
+- [Go](https://go.dev/) ≥ 1.26
 - MySQL 8
 - Redis 7
 
@@ -55,26 +53,29 @@ DB_PASSWORD=
 DB_NAME=alfychat_bots
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=
-SERVICE_REGISTRY_URL=http://gateway:3000
-```
-
-### Installation
-
-```bash
-bun install
+INTERNAL_SECRET=
+GATEWAY_URL=http://localhost:3000
+SERVICE_KEY=
+SERVICE_ENDPOINT=http://localhost:3006
 ```
 
 ### Développement
 
 ```bash
-bun run dev
+go run .
 ```
 
 ### Build production
 
 ```bash
-bun run build
-bun run start
+go build -o bin/bots .
+./bin/bots
+```
+
+### Tests
+
+```bash
+go test ./...
 ```
 
 ### Docker
@@ -86,14 +87,12 @@ docker compose up bots
 ## Structure du projet
 
 ```
-src/
-├── index.ts             # Point d'entrée
-├── controllers/         # Logique métier
-├── routes/              # Définition des routes Express
-├── services/            # Services (DB, cache)
-├── middleware/          # Auth JWT, rate limiting
-├── types/               # Types TypeScript
-└── utils/               # Utilitaires
+main.go                  # Point d'entrée
+internal/
+├── bots/                # Routes, accès aux données, OAuth2, droits serveur
+└── platform/            # Socle commun aux services Go (HTTP, auth, MySQL,
+                         # enregistrement auprès du gateway, validation)
+public/                  # Pages HTML d'accueil et d'erreur
 ```
 
 ## Contribution
