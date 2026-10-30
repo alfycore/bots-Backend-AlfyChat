@@ -166,7 +166,7 @@ func Register(srv *platform.Server, db *platform.DB, rdb *redis.Client, auth *pl
 		return chains(
 			platform.BodyField("clientId").IsUUID().WithMessage("clientId invalide"),
 			// Facultatif : sans redirect_uri, c'est le lien d'ajout simple (scope `bot` seul).
-			platform.BodyField("redirectUri").Optional().IsURL(func(o *platform.URLOptions) { o.RequireTLD = false }).WithMessage("redirectUri invalide"),
+			platform.BodyField("redirectUri").OptionalFalsy().IsURL(func(o *platform.URLOptions) { o.RequireTLD = false }).WithMessage("redirectUri invalide"),
 			platform.BodyField("scopes").IsArray(1, -1).WithMessage("scopes requis"),
 			platform.BodyField("permissions").Optional().IsInt(platform.Min(0)),
 		)
